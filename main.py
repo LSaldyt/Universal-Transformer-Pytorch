@@ -33,7 +33,7 @@ def get_babi_vocab(task):
     train, val, test = datasets.BABI20.splits(text, root='.data', task=task, joint=False,
                                          tenK=True, only_supporting=False)
     text.build_vocab(train)
-    vocab_len = len(text.vocab.freqs) 
+    vocab_len = len(text.vocab.freqs)
     # print("VOCAB LEN:",vocab_len )
     return vocab_len + 1
 
@@ -45,9 +45,9 @@ def evaluate(model, criterion, loader):
         story, query, answer = b.story,b.query,b.answer.squeeze()
         if(config.cuda): story, query, answer = story.cuda(), query.cuda(), answer.cuda()
         pred_prob = model(story, query)
-        loss.append(criterion(pred_prob[0], answer).item()) 
+        loss.append(criterion(pred_prob[0], answer).item())
         pred = pred_prob[1].data.max(1)[1] # max func return (max, argmax)
-        acc.append( pred.eq(answer.data).cpu().numpy() ) 
+        acc.append( pred.eq(answer.data).cpu().numpy() )
 
     acc = np.concatenate(acc)
     acc  = np.mean(acc)
@@ -56,29 +56,29 @@ def evaluate(model, criterion, loader):
 
 def main(config):
     vocab_len = get_babi_vocab(config.task)
-    train_iter, val_iter, test_iter = datasets.BABI20.iters(batch_size=config.batch_size, 
-                                                            root='.data', 
-                                                            memory_size=70, 
-                                                            task=config.task, 
+    train_iter, val_iter, test_iter = datasets.BABI20.iters(batch_size=config.batch_size,
+                                                            root='.data',
+                                                            memory_size=70,
+                                                            task=config.task,
                                                             joint=False,
-                                                            tenK=False, 
-                                                            only_supporting=False, 
-                                                            sort=False, 
+                                                            tenK=False,
+                                                            only_supporting=False,
+                                                            sort=False,
                                                             shuffle=True)
-    model = BabiUTransformer(num_vocab=vocab_len, 
-                    embedding_size=config.emb, 
-                    hidden_size=config.emb, 
+    model = BabiUTransformer(num_vocab=vocab_len,
+                    embedding_size=config.emb,
+                    hidden_size=config.emb,
                     num_layers=config.max_hops,
-                    num_heads=config.heads, 
-                    total_key_depth=config.depth, 
+                    num_heads=config.heads,
+                    total_key_depth=config.depth,
                     total_value_depth=config.depth,
                     filter_size=config.filter,
                     act=config.act)
     if(config.verbose):
         print(model)
         print("ACT",config.act)
-    if(config.cuda): model.cuda()       
-    
+    if(config.cuda): model.cuda()
+
     criterion = nn.CrossEntropyLoss()
     if(config.noam):
         opt = NoamOpt(config.emb, 1, 4000, torch.optim.Adam(model.parameters(), lr=0, betas=(0.9, 0.98), eps=1e-9))
@@ -94,6 +94,7 @@ def main(config):
     avg_best = 0
     cnt = 0
     model.train()
+    weights_best = deepcopy(model.state_dict())
     for b in train_iter:
         story, query, answer = b.story,b.query,b.answer.squeeze()
         if(config.cuda): story, query, answer = story.cuda(), query.cuda(), answer.cuda()
@@ -104,7 +105,7 @@ def main(config):
         pred_prob = model(story, query)
         loss = criterion(pred_prob[0], answer)
         if(config.act):
-            R_t = pred_prob[2][0] 
+            R_t = pred_prob[2][0]
             N_t = pred_prob[2][1]
             p_t = R_t + N_t
             avg_p_t = torch.sum(torch.sum(p_t,dim=1)/p_t.size(1))/p_t.size(0)
@@ -135,17 +136,16 @@ def main(config):
             else:
                 cnt += 1
             if(cnt == 45): break
-            if(avg_best == 1.0): break 
+            if(avg_best == 1.0): break
 
             correct = []
             loss_nb = []
             cnt_batch = 0
 
-
     model.load_state_dict({ name: weights_best[name] for name in weights_best })
     acc_test, loss_test = evaluate(model, criterion, test_iter)
     if(config.verbose):
-        print("TST ACC:{:.4f}\tTST LOSS:{:.4f}".format(acc_val, loss_val))  
+        print("TST ACC:{:.4f}\tTST LOSS:{:.4f}".format(acc_val, loss_val))
     return acc_test
 
 if __name__ == "__main__":

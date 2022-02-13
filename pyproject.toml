@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "universal_transformer"
+version = "0.0.0"
+description = "Simple and self-contained implementation of the Universal Transformer (Dehghani, 2018) in Pytorch."
+authors = ["Your Name <you@example.com>"]
+
+[tool.poetry.dependencies]
+python = "^3.9"
+torch = "^1.10.2"
+torchtext = "0.6.0"
+argparse = "^1.4.0"
+
+[tool.poetry.dev-dependencies]
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"

@@ -11,19 +11,19 @@ from models.common_layer import EncoderLayer ,DecoderLayer ,MultiHeadAttention ,
 
 class BabiUTransformer(nn.Module):
     """
-    A Transformer Module For BabI data. 
+    A Transformer Module For BabI data.
     Inputs should be in the shape story: [batch_size, memory_size, story_len ]
                                   query: [batch_size, 1, story_len]
     Outputs will have the shape [batch_size, ]
     """
     def __init__(self, num_vocab, embedding_size, hidden_size, num_layers, num_heads, total_key_depth, total_value_depth,
-                 filter_size, max_length=71, input_dropout=0.0, layer_dropout=0.0, 
+                 filter_size, max_length=71, input_dropout=0.0, layer_dropout=0.0,
                  attention_dropout=0.0, relu_dropout=0.0, use_mask=False, act=False ):
         super(BabiUTransformer, self).__init__()
         self.embedding_dim = embedding_size
         self.emb = nn.Embedding(num_vocab, embedding_size, padding_idx=0)
         self.transformer_enc = Encoder(embedding_size, hidden_size, num_layers, num_heads, total_key_depth, total_value_depth,
-                                filter_size, max_length=71, input_dropout=input_dropout, layer_dropout=layer_dropout, 
+                                filter_size, max_length=71, input_dropout=input_dropout, layer_dropout=layer_dropout,
                                 attention_dropout=attention_dropout, relu_dropout=relu_dropout, use_mask=False, act=act)
 
         self.W = nn.Linear(self.embedding_dim,num_vocab)
@@ -31,7 +31,7 @@ class BabiUTransformer(nn.Module):
 
         # Share the weight matrix between target word embedding & the final logit dense layer
         self.W.weight = self.emb.weight
-        
+
         self.softmax = nn.Softmax(dim=1)
         ## POSITIONAL MASK
         self.mask = nn.Parameter(I.constant_(torch.empty(11, self.embedding_dim), 1))
@@ -53,7 +53,7 @@ class BabiUTransformer(nn.Module):
 
         ## APPLY TRANSFORMER
         logit, act = self.transformer_enc(embed)
-        
+
         a_hat = self.W(torch.sum(logit,dim=1)/logit.size(1)) ## reduce mean
 
         return a_hat, self.softmax(a_hat), act
@@ -62,13 +62,13 @@ class BabiUTransformer(nn.Module):
 
 class Encoder(nn.Module):
     """
-    A Transformer Encoder module. 
+    A Transformer Encoder module.
     Inputs should be in the shape [batch_size, length, hidden_size]
     Outputs will have the shape [batch_size, length, hidden_size]
     Refer Fig.1 in https://arxiv.org/pdf/1706.03762.pdf
     """
     def __init__(self, embedding_size, hidden_size, num_layers, num_heads, total_key_depth, total_value_depth,
-                 filter_size, max_length=100, input_dropout=0.0, layer_dropout=0.0, 
+                 filter_size, max_length=100, input_dropout=0.0, layer_dropout=0.0,
                  attention_dropout=0.0, relu_dropout=0.0, use_mask=False, act=False):
         """
         Parameters:
@@ -87,23 +87,23 @@ class Encoder(nn.Module):
             relu_dropout: Dropout probability after relu in FFN (Should be non-zero only during training)
             use_mask: Set to True to turn on future value masking
         """
-        
+
         super(Encoder, self).__init__()
-        
+
         self.timing_signal = _gen_timing_signal(max_length, hidden_size)
         ## for t
         self.position_signal = _gen_timing_signal(num_layers, hidden_size)
 
         self.num_layers = num_layers
         self.act = act
-        params =(hidden_size, 
+        params =(hidden_size,
                  total_key_depth or hidden_size,
                  total_value_depth or hidden_size,
-                 filter_size, 
-                 num_heads, 
+                 filter_size,
+                 num_heads,
                  _gen_bias_mask(max_length) if use_mask else None,
-                 layer_dropout, 
-                 attention_dropout, 
+                 layer_dropout,
+                 attention_dropout,
                  relu_dropout)
 
         self.proj_flag = False
@@ -112,7 +112,7 @@ class Encoder(nn.Module):
             self.proj_flag = True
 
         self.enc = EncoderLayer(*params)
-        
+
         self.layer_norm = LayerNorm(hidden_size)
         self.input_dropout = nn.Dropout(input_dropout)
         if(self.act):
@@ -149,13 +149,13 @@ def get_attn_key_pad_mask(seq_k, seq_q):
 
 class Decoder(nn.Module):
     """
-    A Transformer Decoder module. 
+    A Transformer Decoder module.
     Inputs should be in the shape [batch_size, length, hidden_size]
     Outputs will have the shape [batch_size, length, hidden_size]
     Refer Fig.1 in https://arxiv.org/pdf/1706.03762.pdf
     """
     def __init__(self, embedding_size, hidden_size, num_layers, num_heads, total_key_depth, total_value_depth,
-                 filter_size, max_length=100, input_dropout=0.0, layer_dropout=0.0, 
+                 filter_size, max_length=100, input_dropout=0.0, layer_dropout=0.0,
                  attention_dropout=0.0, relu_dropout=0.0, act=False):
         """
         Parameters:
@@ -173,42 +173,42 @@ class Decoder(nn.Module):
             attention_dropout: Dropout probability after attention (Should be non-zero only during training)
             relu_dropout: Dropout probability after relu in FFN (Should be non-zero only during training)
         """
-        
+
         super(Decoder, self).__init__()
-        
+
         self.timing_signal = _gen_timing_signal(max_length, hidden_size)
         self.position_signal = _gen_timing_signal(num_layers, hidden_size)
         self.num_layers = num_layers
         self.act = act
-        params =(hidden_size, 
+        params =(hidden_size,
                  total_key_depth or hidden_size,
                  total_value_depth or hidden_size,
-                 filter_size, 
-                 num_heads, 
+                 filter_size,
+                 num_heads,
                  _gen_bias_mask(max_length), # mandatory
-                 layer_dropout, 
-                 attention_dropout, 
+                 layer_dropout,
+                 attention_dropout,
                  relu_dropout)
 
         self.proj_flag = False
         if(embedding_size == hidden_size):
             self.embedding_proj = nn.Linear(embedding_size, hidden_size, bias=False)
             self.proj_flag = True
-        self.dec = DecoderLayer(*params) 
-        
+        self.dec = DecoderLayer(*params)
+
         self.layer_norm = LayerNorm(hidden_size)
         self.input_dropout = nn.Dropout(input_dropout)
         if(self.act):
             self.act_fn = ACT_basic(hidden_size)
-    
+
     def forward(self, inputs, encoder_output):
         #Add input dropout
         x = self.input_dropout(inputs)
-        
+
         if(self.proj_flag):
             # Project to hidden size
             x = self.embedding_proj(x)
-        
+
         if(self.act):
             x, (remainders,n_updates) = self.act_fn(x, inputs, self.dec, self.timing_signal, self.position_signal, self.num_layers, encoder_output)
             return x, (remainders,n_updates)
@@ -226,8 +226,8 @@ class ACT_basic(nn.Module):
     def __init__(self,hidden_size):
         super(ACT_basic, self).__init__()
         self.sigma = nn.Sigmoid()
-        self.p = nn.Linear(hidden_size,1)  
-        self.p.bias.data.fill_(1) 
+        self.p = nn.Linear(hidden_size,1)
+        self.p.bias.data.fill_(1)
         self.threshold = 1 - 0.1
 
     def forward(self, state, inputs, fn, time_enc, pos_enc, max_hop, encoder_output=None):
@@ -284,8 +284,8 @@ class ACT_basic(nn.Module):
 
             # update running part in the weighted state and keep the rest
             previous_state = ((state * update_weights.unsqueeze(-1)) + (previous_state * (1 - update_weights.unsqueeze(-1))))
-            ## previous_state is actually the new_state at end of hte loop 
-            ## to save a line I assigned to previous_state so in the next 
+            ## previous_state is actually the new_state at end of hte loop
+            ## to save a line I assigned to previous_state so in the next
             ## iteration is correct. Notice that indeed we return previous_state
             step+=1
         return previous_state, (remainders,n_updates)
